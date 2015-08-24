@@ -27,14 +27,14 @@
         <button type='submit'>Add task</button>
     </form>
 
-    <form action='/categories/{{ category.getId }}/edit' method='post'>
+    <form action='/category/{{ category.getId }}/edit' method='post'>
         <input name="_method" type="hidden" value="patch">
         <label for="new_category_name">Rename your category: </label>
         <input id="new_category_name" name="new_category_name" type="text">
         <button type="submit">Update</button>
     </form>
 
-    <form action='/categories/{{ category.getId }}/edit' method='post'>
+    <form action='/category/{{ category.getId }}/edit' method='post'>
         <input name="_method" type="hidden" value="delete">
         <button type="submit">Delete</button>
     </form>
