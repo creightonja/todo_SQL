@@ -1,59 +1,114 @@
 <?php
-  require_once __DIR__."/../vendor/autoload.php";
-  require_once __DIR__."/../src/Task.php";
-  require_once __DIR__."/../src/Category.php";
+    require_once __DIR__."/../vendor/autoload.php";
+    require_once __DIR__."/../src/Task.php";
+    require_once __DIR__."/../src/Category.php";
 
-  $app = new Silex\Application();
-  $app['debug'] = true;
+    $app = new Silex\Application();
+    $app['debug'] = true;
 
-  $server = 'mysql:host=localhost;dbname=to_do';
-  $username = 'root';
-  $password = 'root';
-  $DB = new PDO($server, $username, $password);
+    $server = 'mysql:host=localhost;dbname=to_do';
+    $username = 'root';
+    $password = 'root';
+    $DB = new PDO($server, $username, $password);
 
-  $app->register(new Silex\Provider\TwigServiceProvider(), array(
-    'twig.path' => __DIR__.'/../views'
-));
+    use Symfony\Component\HttpFoundation\Request;
+    Request::enableHttpMethodParameterOverride();
 
-  $app->get("/", function() use ($app) {
+    $app->register(new Silex\Provider\TwigServiceProvider(), array(
+                    'twig.path' => __DIR__.'/../views'
+    ));
 
-    return $app['twig']->render('index.html.twig');
+    //Index page rendering links to categories and tasks
+    $app->get("/", function() use ($app) {
+        return $app['twig']->render('index.html.twig', array('categories' => Category::getAll(), 'tasks' => Task::getAll()));
+    });
 
-  });
+    //Tasks page, lists tasks, add a task, link to edit/update link.
+    $app->get("/tasks", function() use ($app) {
+        return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll()));
+    });
 
-  $app->get("/tasks", function() use ($app) {
-      return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll(), 'categories' => Category::getAll()));
-  });
+    $app->get("/categories", function() use ($app) {
+        return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
+    });
 
-  $app->get("/categories", function() use ($app) {
-      Task::deleteAll();
-      return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
-  });
 
-  $app->post("/categories", function() use ($app) {
-      $category = new Category($_POST['name']);
-      $category->save();
-      return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
-  });
+    $app->post("/categories", function() use ($app) {
+        $category = new Category($_POST['name']);
+        $category->save();
+        return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
+    });
 
-  $app->post("/tasks", function () use ($app) {
-      $id = null;
-      $category_id = intval($_POST['category_id']);
-      $category_name = Category::find($category_id);
-      $task = new Task($_POST['description'], $id, $_POST['due_date'], $category_id);
-      $task->save();
-      return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll(), 'categories' => Category::getAll(), 'category_name' => $category_name));
-  });
+    $app->post("/tasks", function() use ($app) {
+        $description = $_POST['description'];
+        $task = new Task($description);
+        $task->save();
+        return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll()));
+    });
 
-  $app->post("/delete_tasks", function() use ($app) {
-      Task::deleteAll();
-      return $app['twig']->render('index.html.twig');
-  });
+    $app->get("/tasks/{id}", function($id) use ($app) {
+        $task = Task::find($id);
+        return $app['twig']->render('task.html.twig', array('task' => $task, 'categories' => $task->getCategories(), 'all_categories' => Category::getAll()));
+    });
 
-  $app->post("/delete_categories", function() use ($app) {
-      Category::deleteAll();
-      return $app['twig']->render('index.html.twig');
-  });
+    $app->get("/categories/{id}", function($id) use ($app) {
+        $category = Category::find($id);
+        return $app['twig']->render('category.html.twig', array('category' => $category, 'tasks' => $category->getTasks(), 'all_tasks' => Task::getAll()));
+    });
 
-  return $app;
+    $app->post("/add_tasks", function() use ($app) {
+        $category = Category::find($_POST['category_id']);
+        $task = Task::find($_POST['task_id']);
+        $category->addTask($task);
+        return $app['twig']->render('category.html.twig', array('category' => $category, 'categories' => Category::getAll(), 'tasks' => $category->getTasks(), 'all_tasks' => Task::getAll()));
+    });
+
+    $app->post("/add_categories", function() use ($app) {
+        $category = Category::find($_POST['category_id']);
+        $task = Task::find($_POST['task_id']);
+        $task->addCategory($category);
+        return $app['twig']->render('task.html.twig', array('task' => $task, 'tasks' => Task::getAll(), 'categories' => $task->getCategories(), 'all_categories' => Category::getAll()));
+    });
+
+    $app->post("/delete_tasks", function() use ($app) {
+        Task::deleteAll();
+        return $app['twig']->render('index.html.twig');
+    });
+
+    $app->post("/delete_categories", function() use ($app) {
+        Category::deleteAll();
+        return $app['twig']->render('index.html.twig');
+    });
+
+    //Updates task, comes from task.html, posts back to tasks.html
+    $app->patch("/task/{id}/edit", function($id) use ($app){
+        $new_task_name = $_POST['new_task_name'];
+        $task = Task::find($id);
+        $task->update($new_task_name);
+        return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll()));
+    });
+
+    //Deletes task, comes from task.html, posts back to tasks.html
+    $app->delete("/task/{id}/edit", function($id) use ($app) {
+        $task = Task::find($id);
+        $task->delete();
+        return $app['twig']->render('tasks.html.twig', array('tasks' => Task::getAll()));
+    });
+
+    //Updates category, comes from category.html, posts back to categories.html
+    $app->patch("/category/{id}/edit", function($id) use ($app){
+        $new_category_name = $_POST['new_category_name'];
+        $category = Category::find($id);
+        $category->update($new_category_name);
+        return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
+    });
+
+    //Deletes category, comes from category.html, posts back to categories.html
+    $app->delete("/category/{id}/edit", function($id) use ($app) {
+        $category = Category::find($id);
+        $category->delete();
+        return $app['twig']->render('categories.html.twig', array('categories' => Category::getAll()));
+    });
+
+    return $app;
 ?>
